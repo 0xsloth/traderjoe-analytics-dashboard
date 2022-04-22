@@ -13,8 +13,18 @@ from data_getter import (
     to_sjoe_day_snapshots_df,
     to_rjoe_day_snapshots_df,
     to_vejoe_wars_df,
+    data_gathering_loop,
 )
 from utils import load_json
+
+
+import threading
+def my_threaded_func():
+    data_gathering_loop()
+
+thread = threading.Thread(target=my_threaded_func)
+thread.daemon = False
+thread.start()
 
 
 @st.cache

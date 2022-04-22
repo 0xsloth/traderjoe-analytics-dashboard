@@ -1,12 +1,11 @@
-from ast import dump
-from decimal import Decimal
-from re import S
 from typing import Any, Dict, List, Optional
+from decimal import Decimal
+import os
+import time
 from gql import Client, gql
 from gql.transport.requests import RequestsHTTPTransport
 import pandas as pd
-
-from utils import load_json
+from utils import dump_json, load_json
 
 
 SJOE_URL = "https://api.thegraph.com/subgraphs/name/0xsloth/sjoe-stake"
@@ -849,11 +848,7 @@ def to_vejoe_wars_df(vejoe_wars_raw: List[Dict[str, Any]]) -> pd.DataFrame:
     return df
 
 
-if __name__ == "__main__":
-    import os
-    from utils import dump_json
-
-
+def data_gathering_loop() -> None:
     if not os.path.exists("jsons/vejoe_wars.json"):
         data = vejoe_wars_at_multiple_block_numbers(12200000, 13760000, 10000)
         dump_json(data, "jsons/vejoe_wars.json")
@@ -873,7 +868,7 @@ if __name__ == "__main__":
 
     while True:
         for func, path in funcs_and_json_files:
-            print(f"{func.__}")
+            print(f"{func}")
             try:
                 if func == vejoe_wars:
                     data = load_json(path)
@@ -889,3 +884,5 @@ if __name__ == "__main__":
                 import traceback
                 traceback.print_exc()
                 pass
+        # sleep for 10 minutes
+        time.sleep(10 * 60)
