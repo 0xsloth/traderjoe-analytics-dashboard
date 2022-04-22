@@ -23,11 +23,11 @@ def my_threaded_func():
     data_gathering_loop()
 
 thread = threading.Thread(target=my_threaded_func)
-thread.daemon = False
+thread.daemon = True
 thread.start()
 
 
-@st.cache
+@st.cache(ttl=900)
 def get_vejoe_wars() -> pd.DataFrame:
     # df = vejoe_wars(12_700_000, 13_600_000, 10_000)
     vejoe_wars_raw = load_json("jsons/vejoe_wars.json")
@@ -35,7 +35,7 @@ def get_vejoe_wars() -> pd.DataFrame:
     return df
 
 
-@st.cache
+@st.cache(ttl=900)
 def get_sjoe_users_df(is_minimal: bool = True) -> pd.DataFrame:
     # sjoe_users = sjoe_get_all_users()
     sjoe_users = load_json("jsons/sjoe_get_all_users.json")
@@ -46,7 +46,7 @@ def get_sjoe_users_df(is_minimal: bool = True) -> pd.DataFrame:
     return df_sjoe_users
 
 
-@st.cache
+@st.cache(ttl=900)
 def get_vejoe_users_df(is_minimal: bool = True) -> pd.DataFrame:
     # vejoe_users = vejoe_get_all_users()
     vejoe_users = load_json("jsons/vejoe_get_all_users.json")
@@ -57,7 +57,7 @@ def get_vejoe_users_df(is_minimal: bool = True) -> pd.DataFrame:
     return df_vejoe_users
 
 
-@st.cache
+@st.cache(ttl=900)
 def get_rjoe_users_df(is_minimal: bool = True) -> pd.DataFrame:
     # rjoe_users = rjoe_get_all_users()
     rjoe_users = load_json("jsons/rjoe_get_all_users.json")
@@ -69,7 +69,7 @@ def get_rjoe_users_df(is_minimal: bool = True) -> pd.DataFrame:
     return df_rjoe_users
 
 
-@st.cache
+@st.cache(ttl=900)
 def get_vejoe_day_snapshots_df(is_minimal: bool = True) -> pd.DataFrame:
     # vejoe_day_snapshots = vejoe_get_all_day_snapshots()
     vejoe_day_snapshots = load_json("jsons/vejoe_get_all_day_snapshots.json")
@@ -80,7 +80,7 @@ def get_vejoe_day_snapshots_df(is_minimal: bool = True) -> pd.DataFrame:
     return df_vejoe_day_snapshots
 
 
-@st.cache
+@st.cache(ttl=900)
 def get_sjoe_day_snapshots_df(is_minimal: bool = True) -> pd.DataFrame:
     # sjoe_day_snapshots = sjoe_get_all_day_snapshots()
     sjoe_day_snapshots = load_json("jsons/sjoe_get_all_day_snapshots.json")
@@ -91,7 +91,7 @@ def get_sjoe_day_snapshots_df(is_minimal: bool = True) -> pd.DataFrame:
     return df_sjoe_day_snapshots
 
 
-@st.cache
+@st.cache(ttl=900)
 def get_rjoe_day_snapshots_df(is_minimal: bool = True) -> pd.DataFrame:
     # rjoe_day_snapshots = rjoe_get_all_day_snapshots()
     rjoe_day_snapshots = load_json("jsons/rjoe_get_all_day_snapshots.json")
