@@ -984,5 +984,5 @@ def data_gathering_loop() -> None:
                 import traceback
                 traceback.print_exc()
                 pass
-        # sleep for 1 minute
-        time.sleep(1 * 60)
+        # sleep for 3 minutes
+        time.sleep(3 * 60)

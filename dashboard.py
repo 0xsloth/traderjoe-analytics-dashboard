@@ -28,14 +28,14 @@ thread.daemon = True
 thread.start()
 
 
-@st.cache(ttl=60)
+@st.cache(ttl=180)
 def get_vejoe_wars() -> pd.DataFrame:
     vejoe_wars_raw = load_json("jsons/vejoe_wars.json")
     df = to_vejoe_wars_df(vejoe_wars_raw)
     return df
 
 
-@st.cache(ttl=60)
+@st.cache(ttl=180)
 def get_sjoe_users_df(is_minimal: bool = True) -> pd.DataFrame:
     # sjoe_users = sjoe_get_all_users()
     sjoe_users = load_json("jsons/sjoe_get_all_users.json")
@@ -46,7 +46,7 @@ def get_sjoe_users_df(is_minimal: bool = True) -> pd.DataFrame:
     return df_sjoe_users
 
 
-@st.cache(ttl=60)
+@st.cache(ttl=180)
 def get_vejoe_users_df(is_minimal: bool = True) -> pd.DataFrame:
     # vejoe_users = vejoe_get_all_users()
     vejoe_users = load_json("jsons/vejoe_get_all_users.json")
@@ -57,7 +57,7 @@ def get_vejoe_users_df(is_minimal: bool = True) -> pd.DataFrame:
     return df_vejoe_users
 
 
-@st.cache(ttl=60)
+@st.cache(ttl=180)
 def get_rjoe_users_df(is_minimal: bool = True) -> pd.DataFrame:
     # rjoe_users = rjoe_get_all_users()
     rjoe_users = load_json("jsons/rjoe_get_all_users.json")
@@ -69,7 +69,7 @@ def get_rjoe_users_df(is_minimal: bool = True) -> pd.DataFrame:
     return df_rjoe_users
 
 
-@st.cache(ttl=60)
+@st.cache(ttl=180)
 def get_vejoe_day_snapshots_df(is_minimal: bool = True) -> pd.DataFrame:
     # vejoe_day_snapshots = vejoe_get_all_day_snapshots()
     vejoe_day_snapshots = load_json("jsons/vejoe_get_all_day_snapshots.json")
@@ -80,7 +80,7 @@ def get_vejoe_day_snapshots_df(is_minimal: bool = True) -> pd.DataFrame:
     return df_vejoe_day_snapshots
 
 
-@st.cache(ttl=60)
+@st.cache(ttl=180)
 def get_sjoe_day_snapshots_df(is_minimal: bool = True) -> pd.DataFrame:
     # sjoe_day_snapshots = sjoe_get_all_day_snapshots()
     sjoe_day_snapshots = load_json("jsons/sjoe_get_all_day_snapshots.json")
@@ -91,7 +91,7 @@ def get_sjoe_day_snapshots_df(is_minimal: bool = True) -> pd.DataFrame:
     return df_sjoe_day_snapshots
 
 
-@st.cache(ttl=60)
+@st.cache(ttl=180)
 def get_rjoe_day_snapshots_df(is_minimal: bool = True) -> pd.DataFrame:
     # rjoe_day_snapshots = rjoe_get_all_day_snapshots()
     rjoe_day_snapshots = load_json("jsons/rjoe_get_all_day_snapshots.json")
@@ -204,8 +204,8 @@ def make_datatable_heading(
         return f"{label} Pools"
 
 
-@st.cache
-def make_vejoe_wars_datatable(df_vejoe_users: pd.DataFrame) -> pd.DataFrame:
+@st.cache(ttl=180)
+def make_vejoe_wars_datatable() -> pd.DataFrame:
     from_address_to_platform = {
         "0xe7462905B79370389e8180E300F58f63D35B725F".lower(): "YieldYak",
         "0x1F2A8034f444dc55F963fb5925A9b6eb744EeE2c".lower(): "Beefy",
@@ -311,7 +311,7 @@ st.subheader("Wallets")
 
 # st.write("[YieldYak](https://yieldyak.com/")
 
-vejoe_wars_datatable = make_vejoe_wars_datatable(df_vejoe_users)
+vejoe_wars_datatable = make_vejoe_wars_datatable()
 
 
 components.html(
