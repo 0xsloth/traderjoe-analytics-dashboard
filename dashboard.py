@@ -14,6 +14,7 @@ from data_getter import (
     to_rjoe_day_snapshots_df,
     to_vejoe_wars_df,
     data_gathering_loop,
+    vejoe_wars,
 )
 from utils import load_json
 
@@ -27,15 +28,14 @@ thread.daemon = True
 thread.start()
 
 
-@st.cache(ttl=900)
+@st.cache(ttl=60)
 def get_vejoe_wars() -> pd.DataFrame:
-    # df = vejoe_wars(12_700_000, 13_600_000, 10_000)
     vejoe_wars_raw = load_json("jsons/vejoe_wars.json")
     df = to_vejoe_wars_df(vejoe_wars_raw)
     return df
 
 
-@st.cache(ttl=900)
+@st.cache(ttl=60)
 def get_sjoe_users_df(is_minimal: bool = True) -> pd.DataFrame:
     # sjoe_users = sjoe_get_all_users()
     sjoe_users = load_json("jsons/sjoe_get_all_users.json")
@@ -46,7 +46,7 @@ def get_sjoe_users_df(is_minimal: bool = True) -> pd.DataFrame:
     return df_sjoe_users
 
 
-@st.cache(ttl=900)
+@st.cache(ttl=60)
 def get_vejoe_users_df(is_minimal: bool = True) -> pd.DataFrame:
     # vejoe_users = vejoe_get_all_users()
     vejoe_users = load_json("jsons/vejoe_get_all_users.json")
@@ -57,7 +57,7 @@ def get_vejoe_users_df(is_minimal: bool = True) -> pd.DataFrame:
     return df_vejoe_users
 
 
-@st.cache(ttl=900)
+@st.cache(ttl=60)
 def get_rjoe_users_df(is_minimal: bool = True) -> pd.DataFrame:
     # rjoe_users = rjoe_get_all_users()
     rjoe_users = load_json("jsons/rjoe_get_all_users.json")
@@ -69,7 +69,7 @@ def get_rjoe_users_df(is_minimal: bool = True) -> pd.DataFrame:
     return df_rjoe_users
 
 
-@st.cache(ttl=900)
+@st.cache(ttl=60)
 def get_vejoe_day_snapshots_df(is_minimal: bool = True) -> pd.DataFrame:
     # vejoe_day_snapshots = vejoe_get_all_day_snapshots()
     vejoe_day_snapshots = load_json("jsons/vejoe_get_all_day_snapshots.json")
@@ -80,7 +80,7 @@ def get_vejoe_day_snapshots_df(is_minimal: bool = True) -> pd.DataFrame:
     return df_vejoe_day_snapshots
 
 
-@st.cache(ttl=900)
+@st.cache(ttl=60)
 def get_sjoe_day_snapshots_df(is_minimal: bool = True) -> pd.DataFrame:
     # sjoe_day_snapshots = sjoe_get_all_day_snapshots()
     sjoe_day_snapshots = load_json("jsons/sjoe_get_all_day_snapshots.json")
@@ -91,7 +91,7 @@ def get_sjoe_day_snapshots_df(is_minimal: bool = True) -> pd.DataFrame:
     return df_sjoe_day_snapshots
 
 
-@st.cache(ttl=900)
+@st.cache(ttl=60)
 def get_rjoe_day_snapshots_df(is_minimal: bool = True) -> pd.DataFrame:
     # rjoe_day_snapshots = rjoe_get_all_day_snapshots()
     rjoe_day_snapshots = load_json("jsons/rjoe_get_all_day_snapshots.json")
@@ -106,9 +106,9 @@ def get_rjoe_day_snapshots_df(is_minimal: bool = True) -> pd.DataFrame:
 @st.cache
 def join_multiple_dfs(dfs: List[pd.DataFrame], how: Literal["left", "right", "inner", "outer",]) -> pd.DataFrame:
     assert len(dfs) >= 2, "pass at least 2 DataFrames"
-    df = dfs.pop(0)
+    df = dfs.pop(0).copy()
     while True:
-        df_other = dfs.pop(0)
+        df_other = dfs.pop(0).copy()
         df = df.join(df_other, how=how)
         if len(dfs) == 0:
             break
@@ -130,11 +130,10 @@ def make_datatable(
     if len(dfs_c) == 0:
         return pd.DataFrame()
     elif len(dfs_c) == 1:
-        df = dfs_c[0]
+        df_dashboard = dfs_c[0]
     else:
-        df = join_multiple_dfs(dfs_c, how="outer")
+        df_dashboard = join_multiple_dfs(dfs_c, how="outer")
 
-    df_dashboard = df.copy()
     df_dashboard = df_dashboard.applymap(lambda x: f"{x:.3f}".rstrip("0").rstrip("."), na_action="ignore")
     return df_dashboard
 
@@ -211,19 +210,11 @@ def make_vejoe_wars_datatable(df_vejoe_users: pd.DataFrame) -> pd.DataFrame:
         "0xe7462905B79370389e8180E300F58f63D35B725F".lower(): "YieldYak",
         "0x1F2A8034f444dc55F963fb5925A9b6eb744EeE2c".lower(): "Beefy",
         "0xF30E775240D4137daEa097109FEA882C406D61cc".lower(): "NorthPole",
-        "0x0e25c07748f727d6cccd7d2711fd7bd13d13422d".lower(): "Vector",
+        "0x0E25c07748f727D6CCcD7D2711fD7bD13d13422d".lower(): "Vector",
     }
 
-
-    datatable = df_vejoe_users.copy()
-    datatable.columns = ["JOE Stake", "veJOE Balance"]
-    datatable.reset_index(inplace=True)
-
+    datatable = vejoe_wars()
     datatable["address"] = datatable["address"].map(lambda x: from_address_to_platform.get(x, x))
-    datatable["JOE Stake Rank"] = datatable["JOE Stake"].rank(method ="min", ascending=False)
-    datatable["veJOE Balance Rank"] = datatable["veJOE Balance"].rank(method ="min", ascending=False)
-    datatable["JOE Stake Percentage"] = (datatable["JOE Stake"] / datatable["JOE Stake"].sum()).apply(lambda x: f"{x:.3%}")
-    datatable["veJOE Balance Percentage"] = (datatable["veJOE Balance"] / datatable["veJOE Balance"].sum()).apply(lambda x: f"{x:.3%}")
     datatable = datatable.applymap(lambda x: f"{x:.3f}".rstrip("0").rstrip(".") if isinstance(x, Decimal) else x, na_action="ignore")
     datatable.set_index("address", inplace=True)
     return datatable
@@ -288,7 +279,7 @@ platforms_html = """
 
         <a>Vector</a>
         <ul>
-            <li><a href="https://snowtrace.io/address/0x0e25c07748f727d6cccd7d2711fd7bd13d13422d/">Wallet</a></li>
+            <li><a href="https://snowtrace.io/address/0x0E25c07748f727D6CCcD7D2711fD7bD13d13422d/">Wallet</a></li>
             <li><a href="https://vectorfinance.io/">Website</a></li>
             <li><a href="https://twitter.com/vector_fi/">Twitter</a></li>
         </ul>
@@ -493,4 +484,3 @@ df_day_snapshots_active_user_count = query_day_snapshots_datatable(day_snapshots
 st.altair_chart(make_altair_chart(df_day_snapshots_total_joe_stake, "total_JOE_stake", yaxis_title="Staked JOE"), use_container_width=True)
 st.altair_chart(make_altair_chart(df_day_snapshots_total_user_count, "total_user_count", yaxis_title="Total User Count"), use_container_width=True)
 st.altair_chart(make_altair_chart(df_day_snapshots_active_user_count, "active_user_count", yaxis_title="Active User Count"), use_container_width=True)
-

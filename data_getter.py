@@ -11,6 +11,7 @@ from utils import dump_json, load_json
 SJOE_URL = "https://api.thegraph.com/subgraphs/name/0xsloth/sjoe-stake"
 VEJOE_URL = "https://api.thegraph.com/subgraphs/name/0xsloth/vejoe-stake"
 RJOE_URL = "https://api.thegraph.com/subgraphs/name/0xsloth/rjoe-stake"
+VEJOE_BOOSTED_POOLS_URL = "https://api.thegraph.com/subgraphs/id/QmSJLBynLd1kzC2cLSPvLg4G5NGFZ1UCHztuee6FqUFQay"
 
 JOE_DECIMALS = Decimal("18")
 VEJOE_DECIMALS = Decimal("18")
@@ -21,6 +22,8 @@ USDC_DECIMALS = Decimal("6")
 # Select your transport with a defined url endpoint
 sjoe_transport = RequestsHTTPTransport(url=SJOE_URL)
 vejoe_transport = RequestsHTTPTransport(url=VEJOE_URL)
+vejoe_boosted_pools_transport = RequestsHTTPTransport(url=VEJOE_BOOSTED_POOLS_URL)
+vejoe_boosted_pools_transport.connect()
 rjoe_transport = RequestsHTTPTransport(url=RJOE_URL)
 
 # Create a GraphQL client using the defined transport
@@ -29,33 +32,34 @@ vejoe_client = Client(transport=vejoe_transport, fetch_schema_from_transport=Tru
 rjoe_client = Client(transport=rjoe_transport, fetch_schema_from_transport=True)
 
 
-def vejoe_wars(min_block_number: int, max_block_number: int, step_size: int) -> pd.DataFrame:
-    platforms_data = [
-        {
-            "block_number": block_number,
-            "platform": e["platform"],
-            "address": e["address"],
-            "total_stake": Decimal(e["user"]["totalStake"]) if e.get("user") else None,
-            "total_reward": Decimal(e["user"]["totalReward"]) if e.get("user") else None,
-        }
-        for block_number in range(min_block_number, max_block_number+1, step_size)
-        for e in vejoe_get_platforms_at_block_number(block_number).values()
-    ]
-    pool_data = [
-        {
-            "block_number": block_number,
-            "platform": "pool",
-            "address": "pool",
-            "total_stake": Decimal(e["pool"]["totalStake"]) if e.get("pool") else None,
-            "total_reward": Decimal(e["pool"]["totalReward"]) if e.get("pool") else None,
-        }
-        for block_number in range(min_block_number, max_block_number+1, step_size)
-        for e in [vejoe_get_pool_at_block_number(block_number)]
-    ]
-    data = platforms_data + pool_data
-    df = pd.DataFrame(data)
-    df["total_reward"] = df["total_reward"] / Decimal("10") ** VEJOE_DECIMALS
-    df["total_stake"] = df["total_stake"] / Decimal("10") ** JOE_DECIMALS
+def vejoe_wars() -> pd.DataFrame:
+    joe_per_sec = Decimal("1833719582850521436") / Decimal("10") ** JOE_DECIMALS
+    num_secs_in_day = Decimal(60 * 60 * 24)
+    vejoe_users = load_json("jsons/vejoe_get_all_users.json")
+    vejoe_users_boosted_pools = load_json("jsons/vejoe_get_all_users_boosted_pool_positions.json")
+    df_vejoe_users_boosted_pools = to_vejoe_users_boosted_pools_df(vejoe_users_boosted_pools)
+    df_vejoe_users = to_vejoe_users_df(vejoe_users)
+    df = df_vejoe_users_boosted_pools.join(df_vejoe_users, how="outer")
+    df["user_factor"] = (df["veJOE.veJOE_balance"] * df["user_lp_amount"]).fillna(Decimal("0")) ** (Decimal("0.5"))
+    df["total_factor"] = df["user_factor"].groupby(df["pid"]).transform("sum")
+    df["user_factor_ratio"] = df["user_factor"] / df["total_factor"]
+    df["user_lp_ratio"] = df["user_lp_amount"] / df["total_lp_amount"]
+    df["total_alloc_point"] = df.drop_duplicates(subset=["pid"])["alloc_point"].sum()
+    df["boost_joe_per_sec"] = joe_per_sec * (df["alloc_point"] / df["total_alloc_point"]) * (df["veJOE_share_bp"] / Decimal("10000")) * df["user_factor_ratio"]
+    df["base_joe_per_sec"] = joe_per_sec * (df["alloc_point"] / df["total_alloc_point"]) * ((Decimal("10000") - df["veJOE_share_bp"]) / Decimal("10000")) * df["user_lp_ratio"]
+    df["pool_joe_per_sec"] = (df["base_joe_per_sec"] + df["boost_joe_per_sec"])
+    df["user_joe_per_sec"] = df["pool_joe_per_sec"].groupby(df.index).transform("sum")
+    df["user_joe_per_day"] = df["user_joe_per_sec"] * num_secs_in_day
+    df.reset_index(inplace=True)
+    df.drop_duplicates("address", inplace=True)
+    df = df[["address", "veJOE.total_JOE_stake", "veJOE.veJOE_balance", "user_joe_per_day"]].fillna(Decimal("0"))
+    df.rename(columns={"veJOE.total_JOE_stake": "JOE Stake", "veJOE.veJOE_balance": "veJOE Balance", "user_joe_per_day": "Daily JOE Reward"}, inplace=True)
+    df["JOE Stake Rank"] = df["JOE Stake"].rank(method ="min", ascending=False)
+    df["veJOE Balance Rank"] = df["veJOE Balance"].rank(method ="min", ascending=False)
+    df["Daily JOE Reward Rank"] = df["Daily JOE Reward"].rank(method ="min", ascending=False)
+    df["JOE Stake Percentage"] = (df["JOE Stake"] / df["JOE Stake"].sum()).apply(lambda x: f"{x:.3%}")
+    df["veJOE Balance Percentage"] = (df["veJOE Balance"] / df["veJOE Balance"].sum()).apply(lambda x: f"{x:.3%}")
+    df["Daily JOE Reward Percentage"] = (df["Daily JOE Reward"] / df["Daily JOE Reward"].sum()).apply(lambda x: f"{x:.3%}")
     return df
 
 
@@ -157,6 +161,79 @@ def vejoe_get_user_at_block_number(address: str, block_number: int) -> Dict[str,
     # Execute the query on the transport
     result = vejoe_client.execute(query, variable_values=params)
     return result
+
+
+def vejoe_get_users_boosted_pool_positions(last_id: Optional[str] = None) -> Dict[str, Any]:
+    str_query_without_param = (
+        """
+        query getUsersBoostedPoolPositions {
+            users(first: 1000, orderBy: id, orderDirection: asc) {
+                id
+                boostedPoolPositions(first: 1000) {
+                boostedPool {
+                    id
+                    lpToken
+                    allocPoint
+                    veJoeShareBp
+                    totalAmount
+                }
+                totalAmount
+                }
+            }
+        }
+        """
+    )
+
+    str_query_with_param = (
+        """
+        query getUsersBoostedPoolPositions($lastID: ID) {
+            users(first: 1000, orderBy: id, orderDirection: asc, where: { id_gt: $lastID  }) {
+                id
+                boostedPoolPositions(first: 1000) {
+                boostedPool {
+                    id
+                    lpToken
+                    allocPoint
+                    veJoeShareBp
+                    totalAmount
+                }
+                totalAmount
+                }
+            }
+        }
+        """
+    )
+
+    str_query = str_query_with_param if last_id else str_query_without_param
+
+
+    # Provide a GraphQL query
+    query = gql(str_query)
+
+    params = {
+        "lastID": last_id,
+    }
+
+    # Execute the query on the transport
+    result = vejoe_boosted_pools_transport.execute(query, variable_values=params)
+    return result.data
+
+
+def vejoe_get_all_users_boosted_pool_positions() -> List[Dict[str, Any]]:
+    last_id = None
+
+    all_users = []
+    while True:
+        data = vejoe_get_users_boosted_pool_positions(last_id)
+        users = data["users"]
+
+        if len(users) == 0:
+            break
+
+        last_id = users[-1]["id"]
+        all_users.extend(users)
+    
+    return all_users
 
 
 def vejoe_get_users(last_id: Optional[str] = None) -> Dict[str, Any]:
@@ -397,6 +474,28 @@ def to_sjoe_users_df(sjoe_users: List[Dict[str, Any]]) -> pd.DataFrame:
     df_sjoe_users.set_index(keys=["address"], inplace=True)
 
     return df_sjoe_users
+
+
+def to_vejoe_users_boosted_pools_df(vejoe_users_boosted_pools: List[Dict[str, Any]]) -> pd.DataFrame:
+    vejoe_users_boosted_pools_parsed = [
+        {
+            "address": user["id"],
+            "lp_token": boosted_pool_position["boostedPool"]["lpToken"],
+            "pid": int(boosted_pool_position["boostedPool"]["id"]),
+            "veJOE_share_bp": Decimal(boosted_pool_position["boostedPool"]["veJoeShareBp"]),
+            "alloc_point": Decimal(boosted_pool_position["boostedPool"]["allocPoint"]),
+            "total_lp_amount": Decimal(boosted_pool_position["boostedPool"]["totalAmount"]),
+            "user_lp_amount": Decimal(boosted_pool_position["totalAmount"]),
+        }
+        for user in vejoe_users_boosted_pools
+        for boosted_pool_position in user["boostedPoolPositions"]
+    ]
+
+    df = pd.DataFrame(vejoe_users_boosted_pools_parsed)
+
+    df.set_index(keys=["address"], inplace=True)
+
+    return df
 
 
 def to_vejoe_users_df(vejoe_users: List[Dict[str, Any]]) -> pd.DataFrame:
@@ -856,6 +955,7 @@ def data_gathering_loop() -> None:
 
     funcs_and_json_files = [
         (vejoe_get_all_users, "jsons/vejoe_get_all_users.json"),
+        (vejoe_get_all_users_boosted_pool_positions, "jsons/vejoe_get_all_users_boosted_pool_positions.json"),
         (sjoe_get_all_users, "jsons/sjoe_get_all_users.json"),
         (rjoe_get_all_users, "jsons/rjoe_get_all_users.json"),
         (vejoe_get_all_day_snapshots, "jsons/vejoe_get_all_day_snapshots.json"),
@@ -884,5 +984,5 @@ def data_gathering_loop() -> None:
                 import traceback
                 traceback.print_exc()
                 pass
-        # sleep for 10 minutes
-        time.sleep(10 * 60)
+        # sleep for 1 minute
+        time.sleep(1 * 60)
